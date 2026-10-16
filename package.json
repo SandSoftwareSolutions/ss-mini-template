@@ -1,0 +1,43 @@
+{
+  "name": "@sandsoftwaresolutions/mini-template",
+  "version": "0.1.0",
+  "description": "Fill in {{placeholders}} with HTML escaping, filters and errors for missing values. No loops, no code, no prototype tricks.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.js"
+    }
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test",
+    "pack:check": "npm pack --dry-run"
+  },
+  "keywords": [
+    "template",
+    "mustache",
+    "placeholder",
+    "email"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SandSoftwareSolutions/ss-mini-template.git"
+  },
+  "bugs": {
+    "url": "https://github.com/SandSoftwareSolutions/ss-mini-template/issues"
+  },
+  "homepage": "https://github.com/SandSoftwareSolutions/ss-mini-template#readme",
+  "publishConfig": {
+    "access": "public"
+  }
+}
