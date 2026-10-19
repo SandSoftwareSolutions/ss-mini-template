@@ -76,3 +76,33 @@ test("foundry-style placeholders and bad options", () => {
   assert.throws(() => compile("x", { missing: "ignore" }), RangeError);
   assert.throws(() => compile("x", { escape: 5 }), TypeError);
 });
+
+test("filter names are looked up as own properties: constructor, toString and __proto__ are unknown filters", () => {
+  for (const name of ["constructor", "toString", "hasOwnProperty", "__proto__", "valueOf"]) {
+    assert.throws(() => compile(`{{x | ${name}}}`), TemplateError, name);
+  }
+});
+
+test("a pipe inside a quoted filter argument is part of the argument", () => {
+  assert.equal(render('{{x | default: "a|b"}}', {}), "a|b");
+  assert.equal(render("{{x | default: 'a | b' | upper}}", {}), "A | B");
+});
+
+test("a missing value skips the filters before default, and default needs a value", () => {
+  assert.equal(render('{{x | upper | default: "n/a"}}', {}), "n/a");
+  assert.equal(render('{{x | upper | default: "n/a"}}', { x: "a" }), "A");
+  assert.throws(() => compile("{{x | default}}"), TemplateError);
+});
+
+test("an unclosed tag followed by many spaces compiles in linear time", () => {
+  const start = Date.now();
+  compile("{{" + " ".repeat(20000));
+  compile("{{{" + " ".repeat(20000) + "x");
+  assert.ok(Date.now() - start < 500, `took ${Date.now() - start} ms`);
+});
+
+test("inherited properties are not looked up", () => {
+  assert.equal(render("{{__proto__.polluted}}", {}, { missing: "empty" }), "");
+  assert.equal(render("{{constructor.name}}", {}, { missing: "empty" }), "");
+  assert.equal({}.polluted, undefined);
+});

@@ -10,7 +10,8 @@ const FILTERS = {
   default: (v, fallback) => (v === undefined || v === null || v === "" ? fallback : v)
 };
 
-const TAG = /(\\)?\{\{\{\s*([^{}]+?)\s*\}\}\}|(\\)?\{\{\s*([^{}]+?)\s*\}\}/g;
+// The contents are trimmed afterwards: `\s*([^{}]+?)\s*` here backtracked cubically on "{{" followed by thousands of spaces.
+const TAG = /(\\)?\{\{\{([^{}]+)\}\}\}|(\\)?\{\{([^{}]+)\}\}/g;
 
 export class TemplateError extends Error {
   constructor(message, details = {}) {
@@ -20,12 +21,33 @@ export class TemplateError extends Error {
   }
 }
 
+// Splits on "|" but not inside a quoted filter argument: {{x | default: "a|b"}}.
+function splitPipes(source) {
+  const parts = [];
+  let quote = "";
+  let start = 0;
+  for (let i = 0; i < source.length; i++) {
+    const c = source[i];
+    if (quote) {
+      if (c === quote) quote = "";
+    } else if (c === '"' || c === "'") {
+      quote = c;
+    } else if (c === "|") {
+      parts.push(source.slice(start, i));
+      start = i + 1;
+    }
+  }
+  parts.push(source.slice(start));
+  return parts.map((part) => part.trim());
+}
+
 function parseExpression(source) {
-  const [path, ...filterParts] = source.split("|").map((s) => s.trim());
+  const [path, ...filterParts] = splitPipes(source);
   if (!/^[A-Za-z_][\w-]*(\.[\w-]+)*$/.test(path)) throw new TemplateError(`"${source}" is not a valid placeholder (use names like user.name)`, { placeholder: source });
   const filters = filterParts.map((part) => {
     const m = /^(\w+)(?::\s*(?:"([^"]*)"|'([^']*)'|(\S+)))?$/.exec(part);
     if (!m) throw new TemplateError(`"${part}" is not a valid filter`, { placeholder: source });
+    if (m[1] === "default" && m[2] === undefined && m[3] === undefined && m[4] === undefined) throw new TemplateError('the "default" filter needs a value, such as default: "n/a"', { placeholder: source });
     return { name: m[1], arg: m[2] ?? m[3] ?? m[4] };
   });
   return { path, filters };
@@ -62,8 +84,8 @@ export function compile(template, { escape = "html", missing = "throw", filters 
       parts.push(m[0].slice(1));
     } else {
       const raw = m[2] !== undefined;
-      const expression = parseExpression(m[2] ?? m[4]);
-      for (const f of expression.filters) if (!allFilters[f.name]) throw new TemplateError(`unknown filter "${f.name}"`, { placeholder: m[0] });
+      const expression = parseExpression((m[2] ?? m[4]).trim());
+      for (const f of expression.filters) if (!Object.hasOwn(allFilters, f.name) || typeof allFilters[f.name] !== "function") throw new TemplateError(`unknown filter "${f.name}"`, { placeholder: m[0] });
       parts.push({ raw, source: m[0], ...expression });
     }
     last = m.index + m[0].length;
@@ -76,12 +98,13 @@ export function compile(template, { escape = "html", missing = "throw", filters 
         if (typeof part === "string") return part;
         let value = lookup(data, part.path);
         const isMissing = value === undefined || value === null;
-        const hasDefault = part.filters.some((f) => f.name === "default");
-        if (isMissing && !hasDefault) {
+        // A missing value skips the filters before the first `default` ("x | upper | default: 'n'" must not give "UNDEFINED").
+        const firstDefault = part.filters.findIndex((f) => f.name === "default");
+        if (isMissing && firstDefault === -1) {
           if (missing === "throw") throw new TemplateError(`The value for {{${part.path}}} is missing`, { placeholder: part.path });
           return missing === "keep" ? part.source : "";
         }
-        for (const f of part.filters) value = allFilters[f.name](value, f.arg);
+        for (const f of isMissing ? part.filters.slice(firstDefault) : part.filters) value = allFilters[f.name](value, f.arg);
         return part.raw ? String(value) : esc(value);
       })
       .join("");
