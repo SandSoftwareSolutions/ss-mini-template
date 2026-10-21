@@ -10,6 +10,8 @@ Fill in `{{placeholders}}` in emails, messages and generated files. Small on pur
 npm install @sandsoftwaresolutions/mini-template
 ```
 
+Works with `import` and `require()`, and ships TypeScript types for both.
+
 ## Usage
 
 ```js
